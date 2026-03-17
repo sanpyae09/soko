@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>SOKO App</title>
     
+    <!-- PWA Meta Tags -->
     <meta name="theme-color" content="#4f46e5">
     <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" href="./icon-192x192.png">
@@ -13,6 +14,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+    <!-- Import Maps -->
     <script type="importmap">
     {
       "imports": {
@@ -43,6 +45,7 @@
         </div>
     </div>
 
+    <!-- Service Worker for PWA -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -61,13 +64,14 @@
           Edit3, Trash2, X, Menu, Settings, Truck, CalendarDays,
           Home, TrendingUp, TrendingDown, CreditCard, PieChart, Activity,
           PackagePlus, PackageSearch, Image as ImageIcon, ChevronDown, 
-          Phone, Navigation, PackageCheck, Save, CheckSquare, Banknote, Smartphone, Plus, LogOut, Chrome, Wallet, Download, AlertTriangle
+          Phone, Navigation, PackageCheck, Save, CheckSquare, Banknote, Smartphone, Plus, Download, AlertTriangle
         } from 'lucide-react';
         
         // --- Supabase Setup ---
         const SUPABASE_URL = 'https://cbdlxpunxwlsjizjwkax.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNiZGx4cHVueHdsc2ppemp3a2F4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MDI0NjUsImV4cCI6MjA4ODM3ODQ2NX0.BqMteg4YySDbFYso7b-uzFaO68m6wu_SemMUTg8P_NQ';
         const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const LOCAL_USER_ID = 'default_user'; // Dummy user ID for bypass login
 
         // --- Components ---
         function MenuBtn({ icon: Icon, label, screen, count, activeScreen, onClick, color }) {
@@ -197,23 +201,18 @@
 
         // --- Main App Component ---
         function App() {
-          const [session, setSession] = useState(null);
-          const [isAuthLoading, setIsAuthLoading] = useState(true);
-
           const [activeScreen, setActiveScreen] = useState('home'); 
           const [isMenuOpen, setIsMenuOpen] = useState(false); 
           const [homeFilter, setHomeFilter] = useState('monthly'); 
           const [isFilterOpen, setIsFilterOpen] = useState(false); 
 
           const prodClickTimer = useRef(0); 
-
           const getTodayDate = () => new Date().toISOString().split('T')[0];
 
           // Data States
           const [records, setRecords] = useState([]);
           const [products, setProducts] = useState([]);
           const [paymentAccounts, setPaymentAccounts] = useState([]); 
-          
           const [searchTerm, setSearchTerm] = useState('');
           const [dailyDate, setDailyDate] = useState(getTodayDate()); 
           const [showSuccess, setShowSuccess] = useState(false);
@@ -225,14 +224,14 @@
           const [debtPaymentDate, setDebtPaymentDate] = useState(getTodayDate());
           const [debtPaymentMethod, setDebtPaymentMethod] = useState('Cash');
           const [cancelOrderModal, setCancelOrderModal] = useState(null);
-          const [voucherData, setVoucherData] = useState(null); 
+          const [voucherData, setVoucherData] = useState(null);
 
           // Add Product States
           const [productImage, setProductImage] = useState('');
           const [productName, setProductName] = useState('');
           const [productCode, setProductCode] = useState('');
           const [productPrice, setProductPrice] = useState('');
-          const [productCost, setProductCost] = useState(''); 
+          const [productCost, setProductCost] = useState('');
           const [productStock, setProductStock] = useState('');
 
           // Sell Modal States
@@ -252,52 +251,19 @@
           const [newAccName, setNewAccName] = useState('');
           const [newAccNumber, setNewAccNumber] = useState('');
 
-          // --- Authentication Setup ---
-          useEffect(() => {
-            supabaseClient.auth.getSession().then(({ data: { session } }) => {
-              setSession(session);
-              setIsAuthLoading(false);
-            });
-
-            const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((_event, session) => {
-              setSession(session);
-              if (!session) {
-                setProducts([]); setRecords([]); setPaymentAccounts([]);
-              }
-            });
-
-            return () => subscription.unsubscribe();
-          }, []);
-
-          // --- Google Login ---
-          const handleGoogleLogin = async () => {
-            const { error } = await supabaseClient.auth.signInWithOAuth({
-              provider: 'google',
-              options: { redirectTo: window.location.origin }
-            });
-            if (error) alert("Google ဖြင့် ချိတ်ဆက်ရာတွင် အခက်အခဲရှိပါသည်။: " + error.message);
-          };
-
-          const handleLogout = async () => {
-            await supabaseClient.auth.signOut();
-          };
-
-          // --- Load Data (Local First, then Supabase) ---
+          // --- Load Data from Supabase ---
           const fetchSupabaseData = async () => {
-            if (!session?.user?.id) return;
-            const userId = session.user.id;
-
             try {
-              const { data: setObj } = await supabaseClient.from('user_settings').select('*').eq('user_id', userId).single();
+              const { data: setObj } = await supabaseClient.from('user_settings').select('*').eq('user_id', LOCAL_USER_ID).single();
               if (setObj && setObj.payment_accounts) setPaymentAccounts(setObj.payment_accounts);
 
-              const { data: prodData } = await supabaseClient.from('products').select('*').eq('user_id', userId);
+              const { data: prodData } = await supabaseClient.from('products').select('*').eq('user_id', LOCAL_USER_ID);
               if (prodData) {
                 const formattedProds = prodData.map(d => ({ id: Number(d.id), ...d.data })).sort((a,b) => b.id - a.id);
                 setProducts(formattedProds);
               }
 
-              const { data: recData } = await supabaseClient.from('records').select('*').eq('user_id', userId);
+              const { data: recData } = await supabaseClient.from('records').select('*').eq('user_id', LOCAL_USER_ID);
               if (recData) {
                 const formattedRecs = recData.map(d => ({ id: Number(d.id), ...d.data })).sort((a,b) => b.id - a.id);
                 setRecords(formattedRecs);
@@ -306,31 +272,27 @@
           };
 
           useEffect(() => {
-            if (session?.user?.id) {
-              const localProds = localStorage.getItem(`soko_products_${session.user.id}`);
-              const localRecs = localStorage.getItem(`soko_records_${session.user.id}`);
-              if(localProds) setProducts(JSON.parse(localProds));
-              if(localRecs) setRecords(JSON.parse(localRecs));
+            const localProds = localStorage.getItem(`soko_products_${LOCAL_USER_ID}`);
+            const localRecs = localStorage.getItem(`soko_records_${LOCAL_USER_ID}`);
+            if(localProds) setProducts(JSON.parse(localProds));
+            if(localRecs) setRecords(JSON.parse(localRecs));
 
-              fetchSupabaseData();
-              const channel = supabaseClient.channel('schema-db-changes')
-                .on('postgres_changes', { event: '*', schema: 'public' }, fetchSupabaseData).subscribe();
-              return () => supabaseClient.removeChannel(channel);
-            }
-          }, [session]);
+            fetchSupabaseData();
+            
+            const channel = supabaseClient.channel('schema-db-changes')
+              .on('postgres_changes', { event: '*', schema: 'public' }, fetchSupabaseData).subscribe();
+              
+            return () => supabaseClient.removeChannel(channel);
+          }, []);
 
           // Always save to LocalStorage when State changes
           useEffect(() => {
-            if (session?.user?.id) {
-              localStorage.setItem(`soko_products_${session.user.id}`, JSON.stringify(products));
-            }
-          }, [products, session]);
+            localStorage.setItem(`soko_products_${LOCAL_USER_ID}`, JSON.stringify(products));
+          }, [products]);
 
           useEffect(() => {
-            if (session?.user?.id) {
-              localStorage.setItem(`soko_records_${session.user.id}`, JSON.stringify(records));
-            }
-          }, [records, session]);
+            localStorage.setItem(`soko_records_${LOCAL_USER_ID}`, JSON.stringify(records));
+          }, [records]);
 
           const showSuccessMessage = (msg) => {
             setSuccessMsg(msg);
@@ -338,35 +300,31 @@
             setTimeout(() => setShowSuccess(false), 2000);
           }
 
-          // --- Background Sync Helpers (No await block UI) ---
-          const saveProductToCloud = (id, data) => {
-            if(!session) return;
-            const dataToSave = { ...data, user_id: session.user.id };
-            supabaseClient.from('products').upsert({ id: id.toString(), user_id: session.user.id, data: dataToSave })
-              .then(({error}) => { if(error) console.error(error) });
+          // --- Supabase Helpers ---
+          const saveProduct = async (id, data) => {
+            await supabaseClient.from('products').upsert({ id: id.toString(), user_id: LOCAL_USER_ID, data: data });
+            fetchSupabaseData();
           };
-          const deleteProdFromCloud = (id) => {
-            if(!session) return;
-            supabaseClient.from('products').delete().eq('id', id.toString()).then(({error}) => { if(error) console.error(error) });
+          const deleteProd = async (id) => {
+            await supabaseClient.from('products').delete().eq('id', id.toString());
+            fetchSupabaseData();
           };
-          const saveRecordToCloud = (id, data) => {
-            if(!session) return;
-            const dataToSave = { ...data, user_id: session.user.id };
-            supabaseClient.from('records').upsert({ id: id.toString(), user_id: session.user.id, data: dataToSave })
-              .then(({error}) => { if(error) console.error(error) });
+          const saveRecord = async (id, data) => {
+            await supabaseClient.from('records').upsert({ id: id.toString(), user_id: LOCAL_USER_ID, data: data });
+            fetchSupabaseData();
           };
-          const deleteRecFromCloud = (id) => {
-            if(!session) return;
-            supabaseClient.from('records').delete().eq('id', id.toString()).then(({error}) => { if(error) console.error(error) });
+          const deleteRec = async (id) => {
+            await supabaseClient.from('records').delete().eq('id', id.toString());
+            fetchSupabaseData();
           };
-          const saveSettingsToCloud = (accounts) => {
-            if(!session) return;
-            supabaseClient.from('user_settings').upsert({ user_id: session.user.id, payment_accounts: accounts, updated_at: new Date().toISOString() })
-              .then(({error}) => { if(!error) showSuccessMessage('ဆက်တင် သိမ်းဆည်းပြီးပါပြီ'); });
+          const saveSettings = async (accounts) => {
+            await supabaseClient.from('user_settings').upsert({ user_id: LOCAL_USER_ID, payment_accounts: accounts, updated_at: new Date().toISOString() });
+            setPaymentAccounts(accounts);
+            showSuccessMessage('ဆက်တင် သိမ်းဆည်းပြီးပါပြီ');
           };
 
           // --- Actions ---
-          const handleAddProduct = (e) => {
+          const handleAddProduct = async (e) => {
             e.preventDefault();
             if (!productName || !productCode || !productPrice) return;
             const id = Date.now();
@@ -375,23 +333,22 @@
               price: Number(productPrice), cost: Number(productCost) || 0, stock: Number(productStock) || 0 
             };
             
-            setProducts([newProduct, ...products]); // Optimistic local update
+            setProducts([newProduct, ...products]);
             setProductImage(''); setProductName(''); setProductCode(''); setProductPrice(''); setProductCost(''); setProductStock('');
             showSuccessMessage('ပစ္စည်းစာရင်း သွင်းပြီးပါပြီ');
             setActiveScreen('viewProducts');
             
-            saveProductToCloud(id, newProduct); // Background sync
+            await saveProduct(id, newProduct);
           };
 
-          const handleEditProductSubmit = (e) => {
+          const handleEditProductSubmit = async (e) => {
             e.preventDefault();
             if (!editingProduct.name || !editingProduct.code || !editingProduct.price) return;
             setProducts(products.map(p => p.id === editingProduct.id ? editingProduct : p));
             const prodToSave = editingProduct;
             setEditingProduct(null);
             showSuccessMessage('ပစ္စည်းအချက်အလက် ပြင်ဆင်ပြီးပါပြီ');
-            
-            saveProductToCloud(prodToSave.id, prodToSave);
+            await saveProduct(prodToSave.id, prodToSave);
           };
 
           const handleImageUpload = (e, isEditing = false) => {
@@ -429,7 +386,7 @@
             prodClickTimer.current = now;
           };
 
-          const handleConfirmSale = (e) => {
+          const handleConfirmSale = async (e) => {
             e.preventDefault();
             if (sellQty > sellModal.stock) { alert("လက်ကျန်မလောက်ပါ! ကျေးဇူးပြု၍ အရေအတွက် ပြန်စစ်ပါ။"); return; }
 
@@ -448,8 +405,7 @@
               id, date: getTodayDate(), name: sellCustName || 'ဝယ်သူအမည်မသိ', code: sellModal.code,
               productName: sellModal.name, city: sellIsDelivery ? sellCity : '-', quantity: sellQty,
               amount: totalAmount, received: rcv, change: rcv > totalAmount ? rcv - totalAmount : 0, balance: bal,
-              profit: profitAmount,
-              needsDelivery: sellIsDelivery, customerPhone: sellPhone, deliveryAddress: sellAddress,
+              profit: profitAmount, needsDelivery: sellIsDelivery, customerPhone: sellPhone, deliveryAddress: sellAddress,
               deliveryStatus: sellIsDelivery ? 'pending' : 'n/a', remark: sellRemark,
               paymentMethod: rcv > 0 ? sellPaymentMethod : '-', paidDate: bal === 0 ? getTodayDate() : null
             };
@@ -459,11 +415,11 @@
             setVoucherData(newOrder); 
             showSuccessMessage('ရောင်းချခြင်း အောင်မြင်ပါသည်');
             
-            saveProductToCloud(sellModal.id, updatedProduct);
-            saveRecordToCloud(id, newOrder);
+            await saveProduct(sellModal.id, updatedProduct);
+            await saveRecord(id, newOrder);
           };
 
-          const confirmCancelOrder = () => {
+          const confirmCancelOrder = async () => {
             if (!cancelOrderModal) return;
             const record = cancelOrderModal;
             
@@ -471,16 +427,16 @@
             if (relatedProduct) {
               const restoredProduct = { ...relatedProduct, stock: relatedProduct.stock + record.quantity };
               setProducts(products.map(p => p.id === restoredProduct.id ? restoredProduct : p));
-              saveProductToCloud(restoredProduct.id, restoredProduct);
+              await saveProduct(restoredProduct.id, restoredProduct);
             }
 
             setRecords(records.filter(r => r.id !== record.id));
             setCancelOrderModal(null);
             showSuccessMessage('အော်ဒါကို ဖျက်သိမ်း (Cancel) လုပ်ပြီးပါပြီ');
-            deleteRecFromCloud(record.id);
+            await deleteRec(record.id);
           };
 
-          const handleDebtPaymentSubmit = (e) => {
+          const handleDebtPaymentSubmit = async (e) => {
             e.preventDefault();
             if (!debtPaymentRecord) return;
             const existing = records.find(r => r.id === debtPaymentRecord.id);
@@ -491,14 +447,14 @@
             setRecords(records.map(r => r.id === debtPaymentRecord.id ? updatedRec : r));
             setDebtPaymentRecord(null);
             showSuccessMessage('အကြွေးပေးချေမှု မှတ်တမ်းတင်ပြီးပါပြီ');
-            saveRecordToCloud(existing.id, updatedRec);
+            await saveRecord(existing.id, updatedRec);
           };
 
-          const toggleDeliveryStatus = (id, currentStatus) => {
+          const toggleDeliveryStatus = async (id, currentStatus) => {
             const existing = records.find(r => r.id === id);
             const updated = { ...existing, deliveryStatus: currentStatus === 'delivered' ? 'pending' : 'delivered' };
             setRecords(records.map(r => r.id === id ? updated : r));
-            saveRecordToCloud(id, updated);
+            await saveRecord(id, updated);
           };
 
           const handleAddPaymentAccount = (e) => {
@@ -508,21 +464,21 @@
             const newAccounts = [...paymentAccounts, newAcc];
             setPaymentAccounts(newAccounts);
             setNewAccName(''); setNewAccNumber('');
-            saveSettingsToCloud(newAccounts);
+            saveSettings(newAccounts);
           };
 
           const handleRemovePaymentAccount = (id) => {
             if(window.confirm('ဒီအကောင့်ကို ဖျက်ရန် သေချာပါသလား?')) {
               const newAccounts = paymentAccounts.filter(a => a.id !== id);
               setPaymentAccounts(newAccounts);
-              saveSettingsToCloud(newAccounts);
+              saveSettings(newAccounts);
             }
           };
 
-          const deleteRecordData = (id) => {
+          const deleteRecordData = async (id) => {
             if (window.confirm('ဒီမှတ်တမ်းကို ဖျက်ရန် သေချာပါသလား?')) {
               setRecords(records.filter(r => r.id !== id));
-              deleteRecFromCloud(id);
+              await deleteRec(id);
             }
           };
 
@@ -577,33 +533,6 @@
           const filterOptions = { weekly: 'ယခုအပတ်', monthly: 'ယခုလ', yearly: 'ယခုနှစ်', all: 'အားလုံး' };
           const titles = { home: 'ပင်မစာမျက်နှာ', addProduct: 'ပစ္စည်း သွင်းမည်', viewProducts: 'ကုန်ပစ္စည်း စာရင်း', view: 'မှတ်တမ်းအားလုံး', daily: 'နေ့စဉ်အရောင်း', delivery: 'Delivery စာရင်း', settings: 'ဆက်တင်များ' };
 
-          // === RENDER LOGIN SCREEN ===
-          if (isAuthLoading) return <div className="min-h-screen flex items-center justify-center text-indigo-600 font-bold"><div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div></div>;
-          
-          if (!session) {
-            return (
-              <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
-                <div className="bg-white p-8 rounded-3xl shadow-xl max-w-sm w-full text-center space-y-8 animate-in fade-in zoom-in duration-500 border border-slate-100">
-                  <div>
-                    <div className="bg-indigo-100 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 text-indigo-600 shadow-inner">
-                      <ClipboardList size={48} />
-                    </div>
-                    <h1 className="text-3xl font-black text-slate-800 tracking-tight">SOKO App</h1>
-                    <p className="text-slate-500 text-sm mt-3 leading-relaxed">အရောင်းနှင့် မှတ်တမ်းစီမံခန့်ခွဲမှုစနစ်</p>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <button onClick={handleGoogleLogin} className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-3.5 rounded-2xl transition-all shadow-sm">
-                      <Chrome size={20} className="text-blue-500" /> Google ဖြင့် ဝင်ရောက်မည်
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-slate-400 leading-relaxed font-medium">လုံခြုံစိတ်ချရသော Cloud စနစ်ဖြင့် သင့်ဒေတာများကို သိမ်းဆည်းပေးပါသည်။ Data များ ဘယ်တော့မှ မပျောက်ဆုံးပါ။</p>
-                </div>
-              </div>
-            );
-          }
-
-          // === RENDER MAIN APP ===
           return (
             <div className="min-h-screen bg-slate-50 text-slate-800 font-sans py-4 transition-all duration-300 relative select-none pb-10">
               <div className="max-w-6xl mx-auto px-2 md:px-4 transition-all duration-300">
@@ -639,12 +568,8 @@
                     <div className="my-4 border-t border-slate-100"></div>
                     <MenuBtn icon={Settings} label="ဆက်တင်များ (Settings)" screen="settings" activeScreen={activeScreen} onClick={(s)=>{setActiveScreen(s); setIsMenuOpen(false);}} />
                   </div>
-                  <div className="p-4 border-t border-slate-100 space-y-3 bg-slate-50">
-                    <div className="flex items-center gap-2 text-xs text-slate-600 font-bold">
-                      <img src={session?.user?.user_metadata?.avatar_url || ''} className="w-8 h-8 rounded-full bg-white border shadow-sm" onError={(e)=>e.target.style.display='none'}/> 
-                      <div className="flex flex-col truncate"><span className="truncate">{session?.user?.user_metadata?.full_name || session?.user?.email || 'User'}</span><span className="text-[10px] text-emerald-600">Cloud Sync Active</span></div>
-                    </div>
-                    <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 py-2.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold rounded-lg transition-colors text-sm shadow-sm"><LogOut size={16}/> ထွက်မည် (Logout)</button>
+                  <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-center text-xs font-bold text-emerald-600 gap-1">
+                    <CheckCircle2 size={16}/> စနစ် အလုပ်လုပ်နေပါသည်
                   </div>
                 </div>
 
@@ -740,7 +665,7 @@
                                 <h3 className="font-extrabold text-slate-800 text-base md:text-lg truncate pr-2" title={p.name}>{p.name}</h3>
                                 <div className="flex gap-1 shrink-0">
                                   <button onClick={(e) => { e.stopPropagation(); setEditingProduct(p); }} className="text-slate-400 hover:text-blue-500 bg-slate-50 p-1.5 rounded-md"><Edit3 size={14}/></button>
-                                  <button onClick={(e) => { e.stopPropagation(); handleDeleteProduct(p.id); }} className="text-slate-400 hover:text-red-500 bg-slate-50 p-1.5 rounded-md"><Trash2 size={14}/></button>
+                                  <button onClick={(e) => { e.stopPropagation(); deleteProd(p.id); setProducts(products.filter(item=>item.id!==p.id)); }} className="text-slate-400 hover:text-red-500 bg-slate-50 p-1.5 rounded-md"><Trash2 size={14}/></button>
                                 </div>
                               </div>
                               <p className="text-sm text-slate-500 font-mono mb-1">{p.code}</p>
@@ -822,7 +747,6 @@
                         <button onClick={() => setVoucherData(null)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
                       </div>
                       
-                      {/* Receipt Content to Convert to Image */}
                       <div id="receipt-box" className="p-6 bg-white mx-auto w-full max-w-[320px] font-mono">
                         <div className="text-center mb-4">
                           <h1 className="text-2xl font-black text-slate-800">SOKO App</h1>
