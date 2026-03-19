@@ -1,4 +1,4 @@
-const CACHE_NAME = 'soko-pwa-cache-v2.0.6'; // Version ပြောင်းလိုက်ပါသည်
+const CACHE_NAME = 'soko-pwa-cache-v2.0.7'; // Version ပြောင်းလိုက်ပါသည်
 const urlsToCache = [
   './',
   './index.html',

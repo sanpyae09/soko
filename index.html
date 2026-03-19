@@ -88,7 +88,7 @@
           Edit3, Trash2, X, Menu, Settings, Truck, CalendarDays,
           Home, TrendingUp, TrendingDown, CreditCard, PieChart, Activity,
           PackagePlus, PackageSearch, Image as ImageIcon, ChevronDown, 
-          Phone, Navigation, PackageCheck, Save, CheckSquare, Banknote, Smartphone, Plus, LogOut, Download, AlertTriangle, DownloadCloud, MonitorPlay, FileText, Minus, Receipt, CreditCard as CardIcon
+          Phone, Navigation, PackageCheck, Save, CheckSquare, Banknote, Smartphone, Plus, LogOut, Download, AlertTriangle, DownloadCloud, MonitorPlay, FileText, Minus, Receipt, CreditCard as CardIcon, Store
         } from 'lucide-react';
         
         // --- Supabase Setup ---
@@ -134,11 +134,15 @@
           );
         }
 
-        function Input({ label, type="text", val, setVal, req, icon: Icon, min, max, placeholder, disabled }) {
+        function Input({ label, type="text", val, setVal, req, icon: Icon, min, max, placeholder, disabled, rows }) {
           return (
             <div className="space-y-1.5">
               <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">{Icon && <Icon size={14} className="text-indigo-500"/>} {label}</label>
-              <input type={type} value={val} onChange={(e) => setVal(e.target.value)} required={req} min={min} max={max} placeholder={placeholder} disabled={disabled} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white disabled:bg-slate-100 disabled:text-slate-500" />
+              {rows ? (
+                <textarea value={val} onChange={(e) => setVal(e.target.value)} required={req} placeholder={placeholder} disabled={disabled} rows={rows} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white disabled:bg-slate-100 disabled:text-slate-500 resize-none"></textarea>
+              ) : (
+                <input type={type} value={val} onChange={(e) => setVal(e.target.value)} required={req} min={min} max={max} placeholder={placeholder} disabled={disabled} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white disabled:bg-slate-100 disabled:text-slate-500" />
+              )}
             </div>
           );
         }
@@ -155,7 +159,7 @@
                   return (
                     <button key={opt.id} type="button" onClick={() => onChange(opt.id)} className={`flex flex-col items-center justify-center p-2 rounded-xl border transition-all ${selected === opt.id ? 'bg-indigo-50 border-indigo-500 text-indigo-700 shadow-sm' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
                       <IconComponent size={16} className={`mb-1 ${selected === opt.id ? 'text-indigo-500' : 'text-slate-400'}`} />
-                      <span className="text-[10px] font-bold">{opt.label}</span>
+                      <span className="text-[10px] font-bold text-center leading-tight">{opt.label}</span>
                     </button>
                   );
                 })}
@@ -197,10 +201,7 @@
                         <td className="px-3 py-3">
                           <p className="font-bold text-slate-800">{r.name}</p>
                           <p className="text-[10px] text-slate-500 font-mono mt-0.5">{r.date} | {r.code}</p>
-                          {/* If cartItems exist, show a small summary */}
-                          {r.cartItems && (
-                             <p className="text-[10px] text-indigo-500 mt-0.5">({r.cartItems.length} items)</p>
-                          )}
+                          {r.cartItems && <p className="text-[10px] text-indigo-500 mt-0.5">({r.cartItems.length} items)</p>}
                         </td>
                         <td className="px-3 py-3 text-right font-medium">{r.amount > 0 ? r.amount.toLocaleString() : '-'}</td>
                         <td className="px-3 py-3 text-right">
@@ -260,6 +261,11 @@
           const [showSuccess, setShowSuccess] = useState(false);
           const [successMsg, setSuccessMsg] = useState('');
 
+          // Shop Settings State (Local Storage for simplicity)
+          const [shopName, setShopName] = useState('SOKO App');
+          const [shopPhone, setShopPhone] = useState('');
+          const [shopAddress, setShopAddress] = useState('');
+
           // POS State
           const [cart, setCart] = useState([]);
           const [showMobileCart, setShowMobileCart] = useState(false);
@@ -282,7 +288,7 @@
           const [productCost, setProductCost] = useState(''); 
           const [productStock, setProductStock] = useState('');
 
-          // Sell Modal States (For Normal View)
+          // Universal Sell Form States (used in both Normal Sell and POS Checkout)
           const [sellModal, setSellModal] = useState(null);
           const [sellQty, setSellQty] = useState(1);
           const [sellCustName, setSellCustName] = useState('');
@@ -294,16 +300,14 @@
           const [sellRemark, setSellRemark] = useState('');
           const [sellPaymentMethod, setSellPaymentMethod] = useState('Cash');
 
-          // Settings Form State
+          // Payment Account Form State
           const [newAccProvider, setNewAccProvider] = useState('KBZ Pay');
           const [newAccName, setNewAccName] = useState('');
           const [newAccNumber, setNewAccNumber] = useState('');
 
           // --- PWA Setup Listener ---
           useEffect(() => {
-            if (window.deferredPrompt) {
-              setIsInstallable(true);
-            }
+            if (window.deferredPrompt) setIsInstallable(true);
             const handlePwaReady = () => setIsInstallable(true);
             window.addEventListener('pwa-install-ready', handlePwaReady);
             return () => window.removeEventListener('pwa-install-ready', handlePwaReady);
@@ -371,10 +375,19 @@
 
           useEffect(() => {
             if (session?.user?.id) {
+              // Load Local Configs
               const localProds = localStorage.getItem(`soko_products_${session.user.id}`);
               const localRecs = localStorage.getItem(`soko_records_${session.user.id}`);
+              const localShop = localStorage.getItem(`soko_shopinfo_${session.user.id}`);
+              
               if(localProds) setProducts(JSON.parse(localProds));
               if(localRecs) setRecords(JSON.parse(localRecs));
+              if(localShop) {
+                const s = JSON.parse(localShop);
+                setShopName(s.name || 'SOKO App');
+                setShopPhone(s.phone || '');
+                setShopAddress(s.address || '');
+              }
 
               fetchSupabaseData();
               const channel = supabaseClient.channel('schema-db-changes')
@@ -383,7 +396,6 @@
             }
           }, [session]);
 
-          // Save to LocalStorage for offline capability
           useEffect(() => {
             if (session?.user?.id) localStorage.setItem(`soko_products_${session.user.id}`, JSON.stringify(products));
           }, [products, session]);
@@ -393,8 +405,7 @@
           }, [records, session]);
 
           const showSuccessMessage = (msg) => {
-            setSuccessMsg(msg);
-            setShowSuccess(true);
+            setSuccessMsg(msg); setShowSuccess(true);
             setTimeout(() => setShowSuccess(false), 2000);
           }
 
@@ -426,6 +437,12 @@
             await supabaseClient.from('user_settings').upsert({ user_id: session.user.id, payment_accounts: accounts, updated_at: new Date().toISOString() });
             setPaymentAccounts(accounts);
             showSuccessMessage('ဆက်တင် သိမ်းဆည်းပြီးပါပြီ');
+          };
+          const saveShopInfo = (e) => {
+            e.preventDefault();
+            if (!session?.user?.id) return;
+            localStorage.setItem(`soko_shopinfo_${session.user.id}`, JSON.stringify({name: shopName, phone: shopPhone, address: shopAddress}));
+            showSuccessMessage('ဆိုင်အချက်အလက် သိမ်းဆည်းပြီးပါပြီ');
           };
 
           // --- General Actions ---
@@ -529,7 +546,6 @@
             if (!cancelOrderModal) return;
             const record = cancelOrderModal;
             
-            // Revert Stock logic
             if (record.cartItems && record.cartItems.length > 0) {
               // POS Order Revert
               const updatedProducts = [...products];
@@ -605,14 +621,10 @@
 
           // --- POS Logic ---
           const addToCart = (product) => {
-            if (product.stock <= 0) {
-              alert("လက်ကျန်မရှိတော့ပါ!"); return;
-            }
+            if (product.stock <= 0) return alert("လက်ကျန်မရှိတော့ပါ!");
             const existing = cart.find(item => item.id === product.id);
             if (existing) {
-              if (existing.qty >= product.stock) {
-                alert("လက်ကျန်မလောက်ပါ!"); return;
-              }
+              if (existing.qty >= product.stock) return alert("လက်ကျန်မလောက်ပါ!");
               setCart(cart.map(item => item.id === product.id ? { ...item, qty: item.qty + 1 } : item));
             } else {
               setCart([...cart, { ...product, qty: 1 }]);
@@ -635,6 +647,12 @@
 
           const posTotal = cart.reduce((s, i) => s + (i.price * i.qty), 0);
 
+          const openPosCheckout = () => {
+            setSellCustName(''); setSellIsDelivery(false); setSellPhone(''); setSellAddress(''); 
+            setSellCity(''); setPosTenderedAmount(''); setSellRemark(''); setSellPaymentMethod('Cash');
+            setIsPosCheckoutOpen(true);
+          }
+
           const handlePosCheckoutComplete = async () => {
             if (cart.length === 0) return;
             
@@ -649,7 +667,7 @@
               const pIndex = updatedProducts.findIndex(p => p.id === item.id);
               if (pIndex !== -1) {
                 updatedProducts[pIndex] = { ...updatedProducts[pIndex], stock: updatedProducts[pIndex].stock - item.qty };
-                await saveProduct(item.id, updatedProducts[pIndex]); // Async save
+                await saveProduct(item.id, updatedProducts[pIndex]); 
               }
               totalCost += ((item.cost || 0) * item.qty);
             }
@@ -657,24 +675,24 @@
             const profitAmount = posTotal - totalCost;
             const id = Date.now();
 
-            // Create Unified Order Record
             const newOrder = {
-              id, date: getTodayDate(), name: sellCustName || 'POS Customer', code: 'POS-' + id.toString().slice(-4),
+              id, date: getTodayDate(), name: sellCustName || 'Customer', code: 'POS-' + id.toString().slice(-4),
               productName: cart.length > 1 ? `${cart[0].name} (+${cart.length-1})` : cart[0].name,
-              cartItems: cart, // Save full cart for receipt
-              city: '-', quantity: cart.reduce((sum, item) => sum + item.qty, 0), 
+              cartItems: cart, 
+              city: sellIsDelivery ? sellCity : '-', 
+              quantity: cart.reduce((sum, item) => sum + item.qty, 0), 
               amount: posTotal, received: rcv, change: change, balance: bal, 
-              profit: profitAmount, needsDelivery: false, deliveryStatus: 'n/a', 
-              paymentMethod: sellPaymentMethod, paidDate: bal === 0 ? getTodayDate() : null, remark: 'POS Sale'
+              profit: profitAmount, needsDelivery: sellIsDelivery, 
+              customerPhone: sellPhone, deliveryAddress: sellAddress,
+              deliveryStatus: sellIsDelivery ? 'pending' : 'n/a', remark: sellRemark,
+              paymentMethod: rcv > 0 ? sellPaymentMethod : '-', paidDate: bal === 0 ? getTodayDate() : null
             };
 
             setProducts(updatedProducts);
             setRecords([newOrder, ...records]);
             setCart([]);
             setIsPosCheckoutOpen(false);
-            setSellCustName('');
-            setPosTenderedAmount('');
-            setVoucherData(newOrder); // Open receipt
+            setVoucherData(newOrder); 
             showSuccessMessage('အရောင်းစာရင်း ရှင်းလင်းပြီးပါပြီ');
             
             await saveRecord(id, newOrder); 
@@ -693,15 +711,15 @@
             } else { alert("ပုံထုတ်ရာတွင် အခက်အခဲရှိနေပါသည်။"); }
           };
 
-          // --- PDF EXPORT (Using html2canvas + jsPDF for Burmese Support) ---
+          // --- PDF EXPORT ---
           const generatePDF = () => {
             const element = document.getElementById('record-table-container');
             if(window.html2canvas && window.jspdf && element) {
               const actionCols = element.querySelectorAll('th:last-child, td:last-child');
-              actionCols.forEach(col => col.style.display = 'none'); // Hide Settings column
+              actionCols.forEach(col => col.style.display = 'none'); 
               
               window.html2canvas(element, { scale: 2 }).then(canvas => {
-                actionCols.forEach(col => col.style.display = ''); // Show again
+                actionCols.forEach(col => col.style.display = ''); 
 
                 const imgData = canvas.toDataURL('image/png');
                 const { jsPDF } = window.jspdf;
@@ -763,7 +781,7 @@
           const titles = { home: 'ပင်မစာမျက်နှာ', pos: 'POS (လက်လီအရောင်း)', addProduct: 'ပစ္စည်း သွင်းမည်', viewProducts: 'ကုန်ပစ္စည်း စာရင်း', view: 'မှတ်တမ်းအားလုံး', daily: 'နေ့စဉ်အရောင်း', delivery: 'Delivery စာရင်း', settings: 'ဆက်တင်များ' };
 
           // === RENDER LOGIN SCREEN ===
-          if (isAuthLoading) return null; // Keep HTML spinner showing
+          if (isAuthLoading) return null; 
           
           if (!session) {
             const loader = document.getElementById('root').firstElementChild;
@@ -780,7 +798,6 @@
                 <div className="bg-white p-8 md:p-10 rounded-3xl shadow-2xl max-w-sm w-full text-center space-y-8 border border-slate-100 relative overflow-hidden animate-in fade-in zoom-in duration-500">
                   <div className="absolute -top-10 -right-10 w-32 h-32 bg-indigo-50 rounded-full blur-2xl opacity-70"></div>
                   <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-emerald-50 rounded-full blur-2xl opacity-70"></div>
-
                   <div className="relative z-10">
                     <div className="bg-indigo-100 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 text-indigo-600 shadow-inner">
                       <ClipboardList size={48} />
@@ -914,36 +931,43 @@
                   </div>
                 )}
 
-                {/* --- RETAIL POS SCREEN --- */}
+                {/* --- RETAIL POS SCREEN (COMPACT HORIZONTAL CARDS & EXPANDED CHECKOUT) --- */}
                 {activeScreen === 'pos' && (
                   <div className="animate-in fade-in duration-300 flex flex-col md:flex-row gap-4 h-[calc(100vh-100px)] max-w-6xl mx-auto relative overflow-hidden">
                     
-                    {/* Left: Products Grid */}
+                    {/* Left: Products Grid (Compact) */}
                     <div className="flex-1 bg-white rounded-2xl shadow-sm border border-slate-100 p-3 md:p-4 flex flex-col h-full overflow-hidden">
-                      <div className="mb-4 relative">
+                      <div className="mb-4 relative shrink-0">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                         <input type="text" placeholder="ပစ္စည်းအမည် ရှာရန်..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" />
                       </div>
                       
-                      <div className="flex-1 overflow-y-auto pr-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 pb-20 md:pb-0">
+                      {/* Compact Horizontal Cards Grid */}
+                      <div className="flex-1 overflow-y-auto pr-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pb-24 md:pb-0 content-start">
                         {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
-                          <div key={p.id} onClick={() => addToCart(p)} className="bg-white rounded-xl p-3 border border-slate-200 shadow-sm cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 hover:shadow-md active:scale-95 transition-all flex flex-col items-center text-center relative group">
-                            {p.stock <= 3 && <span className="absolute top-1 right-1 bg-red-500 w-2.5 h-2.5 rounded-full animate-pulse z-10"></span>}
-                            {p.image ? <img src={p.image} className="w-16 h-16 md:w-20 md:h-20 object-cover rounded-lg mb-2 group-hover:opacity-90 transition-opacity" /> : <div className="w-16 h-16 md:w-20 md:h-20 bg-slate-100 rounded-lg mb-2 flex items-center justify-center text-slate-300"><ImageIcon size={24}/></div>}
-                            <p className="font-bold text-slate-800 text-xs line-clamp-2 leading-tight w-full">{p.name}</p>
-                            <p className="text-indigo-600 font-black text-sm mt-1">{p.price.toLocaleString()} Ks</p>
-                            <p className="text-[10px] text-slate-400 mt-1 font-medium bg-slate-100 px-2 py-0.5 rounded-full">Stock: {p.stock}</p>
+                          <div key={p.id} onClick={() => addToCart(p)} className="bg-white rounded-xl p-2 border border-slate-200 shadow-sm cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 active:scale-95 transition-all flex items-center gap-3 relative group h-20">
+                            {p.stock <= 3 && <span className="absolute -top-1 -right-1 bg-red-500 w-2.5 h-2.5 rounded-full animate-pulse z-10 shadow-sm"></span>}
+                            {p.image ? (
+                              <img src={p.image} className="w-14 h-14 object-cover rounded-lg group-hover:opacity-90 transition-opacity shrink-0" />
+                            ) : (
+                              <div className="w-14 h-14 bg-slate-100 rounded-lg flex items-center justify-center text-slate-300 shrink-0"><ImageIcon size={20}/></div>
+                            )}
+                            <div className="flex-1 min-w-0 text-left flex flex-col justify-center">
+                              <h3 className="font-bold text-slate-800 text-[13px] truncate" title={p.name}>{p.name}</h3>
+                              <p className="text-indigo-600 font-black text-sm mt-0.5 leading-none">{p.price.toLocaleString()} <span className="text-[10px] font-normal">Ks</span></p>
+                              <div className="mt-1"><span className="text-[10px] text-slate-500 font-medium bg-slate-100 px-1.5 py-0.5 rounded">Stock: {p.stock}</span></div>
+                            </div>
                           </div>
                         ))}
                       </div>
                     </div>
                     
                     {/* Right: Cart Panel (Desktop) / Slide-up Panel (Mobile) */}
-                    <div className={`w-full md:w-[350px] bg-white rounded-t-3xl md:rounded-2xl shadow-2xl md:shadow-sm border border-slate-100 flex flex-col shrink-0 transition-transform duration-300 z-40
-                        ${showMobileCart ? 'fixed bottom-0 left-0 right-0 h-[80vh] slide-up' : 'hidden md:flex h-full'}
+                    <div className={`w-full md:w-[350px] bg-white rounded-t-3xl md:rounded-2xl shadow-[0_-10px_40px_rgba(0,0,0,0.1)] md:shadow-sm border border-slate-100 flex flex-col shrink-0 transition-transform duration-300 z-40
+                        ${showMobileCart ? 'fixed bottom-0 left-0 right-0 h-[85vh] slide-up' : 'hidden md:flex h-full'}
                       `}>
                       
-                      <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 md:bg-white rounded-t-3xl md:rounded-t-2xl">
+                      <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 md:bg-white rounded-t-3xl md:rounded-t-2xl shrink-0">
                         <h3 className="font-black text-slate-800 flex items-center gap-2 text-lg"><ShoppingCart size={20} className="text-indigo-600"/> ခြင်းတောင်း</h3>
                         <div className="flex gap-3 items-center">
                            <button onClick={() => { if(window.confirm('ခြင်းတောင်းကို အကုန်ဖျက်မလား?')) setCart([]); }} className="text-[10px] font-bold text-red-500 bg-red-50 px-2 py-1 rounded-md hover:bg-red-100 transition-colors">Clear All</button>
@@ -976,7 +1000,7 @@
                         )}
                       </div>
                       
-                      <div className="p-4 border-t border-slate-200 bg-white rounded-b-2xl shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                      <div className="p-4 border-t border-slate-200 bg-white rounded-b-3xl md:rounded-b-2xl shrink-0">
                         <div className="flex justify-between items-end mb-4">
                           <span className="font-bold text-slate-500 text-sm">စုစုပေါင်း (Total)</span>
                           <div className="text-right">
@@ -984,7 +1008,7 @@
                              <span className="font-black text-2xl text-indigo-700 leading-none">{posTotal.toLocaleString()} <span className="text-sm">Ks</span></span>
                           </div>
                         </div>
-                        <button onClick={() => setIsPosCheckoutOpen(true)} disabled={cart.length === 0} className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:shadow-none text-white font-bold text-lg rounded-xl shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2 active:scale-[0.98]">
+                        <button onClick={openPosCheckout} disabled={cart.length === 0} className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:shadow-none text-white font-bold text-lg rounded-xl shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2 active:scale-[0.98]">
                           ငွေရှင်းမည် (Pay)
                         </button>
                       </div>
@@ -1003,27 +1027,32 @@
                   </div>
                 )}
 
-                {/* --- POS CHECKOUT MODAL --- */}
+                {/* --- COMPREHENSIVE POS CHECKOUT MODAL --- */}
                 {isPosCheckoutOpen && (
-                  <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-md shadow-2xl flex flex-col slide-up md:animate-none">
-                      <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-3xl md:rounded-t-3xl">
-                        <h3 className="font-black text-lg text-indigo-900 flex items-center gap-2"><CardIcon size={20}/> Checkout ရှင်းတမ်း</h3>
+                  <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-[55] animate-in fade-in duration-200">
+                    <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-lg shadow-2xl flex flex-col slide-up md:animate-none max-h-[90vh]">
+                      <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-3xl shrink-0">
+                        <h3 className="font-black text-lg text-indigo-900 flex items-center gap-2"><CardIcon size={20}/> ငွေရှင်းတမ်း (Checkout)</h3>
                         <button onClick={() => setIsPosCheckoutOpen(false)} className="bg-slate-200 p-1.5 rounded-full text-slate-600 hover:bg-slate-300"><X size={18}/></button>
                       </div>
                       
                       <div className="p-6 overflow-y-auto space-y-6">
+                        {/* Summary Box */}
                         <div className="text-center bg-indigo-50 border border-indigo-100 rounded-2xl p-4">
                            <p className="text-sm font-bold text-indigo-400 mb-1">ကျသင့်ငွေ (Total Due)</p>
                            <p className="text-4xl font-black text-indigo-700">{posTotal.toLocaleString()} Ks</p>
                         </div>
                         
-                        <div className="space-y-3">
-                           <label className="block text-sm font-bold text-slate-700">ပေးငွေ (Amount Tendered)</label>
-                           <div className="relative">
-                             <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">Ks</span>
-                             <input type="number" value={posTenderedAmount} onChange={(e)=>setPosTenderedAmount(e.target.value)} placeholder="0" className="w-full pl-12 pr-4 py-3 text-xl font-bold bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow" />
+                        {/* Payment Details */}
+                        <div className="space-y-4 bg-white border border-slate-200 p-4 rounded-2xl shadow-sm">
+                           <div>
+                             <label className="block text-sm font-bold text-slate-700 mb-1.5">ပေးငွေ (Amount Tendered)</label>
+                             <div className="relative">
+                               <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">Ks</span>
+                               <input type="number" value={posTenderedAmount} onChange={(e)=>setPosTenderedAmount(e.target.value)} placeholder="0" className="w-full pl-12 pr-4 py-3 text-xl font-bold bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow" />
+                             </div>
                            </div>
+                           
                            {/* Quick Cash Buttons */}
                            <div className="flex gap-2 overflow-x-auto pb-1">
                              <button onClick={() => setPosTenderedAmount(posTotal.toString())} className="shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg border border-slate-200">အပြည့်ပေး</button>
@@ -1031,22 +1060,44 @@
                              <button onClick={() => setPosTenderedAmount((Number(posTenderedAmount)||0) + 5000)} className="shrink-0 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs rounded-lg border border-emerald-200">+ 5,000</button>
                              <button onClick={() => setPosTenderedAmount((Number(posTenderedAmount)||0) + 10000)} className="shrink-0 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs rounded-lg border border-emerald-200">+ 10,000</button>
                            </div>
+
+                           {/* Automatic Change Calculator */}
+                           {Number(posTenderedAmount) > posTotal && (
+                              <div className="flex justify-between items-center bg-rose-50 border border-rose-100 p-3 rounded-xl animate-in zoom-in-95">
+                                 <span className="font-bold text-rose-600">ပြန်အမ်းငွေ (Change)</span>
+                                 <span className="font-black text-xl text-rose-700">{(Number(posTenderedAmount) - posTotal).toLocaleString()} Ks</span>
+                              </div>
+                           )}
+
+                           <PaymentMethodSelector selected={sellPaymentMethod} onChange={setSellPaymentMethod} accounts={paymentAccounts} />
                         </div>
 
-                        {/* Automatic Change Calculator */}
-                        {Number(posTenderedAmount) > posTotal && (
-                           <div className="flex justify-between items-center bg-rose-50 border border-rose-100 p-4 rounded-xl animate-in zoom-in-95">
-                              <span className="font-bold text-rose-600">ပြန်အမ်းငွေ (Change)</span>
-                              <span className="font-black text-xl text-rose-700">{(Number(posTenderedAmount) - posTotal).toLocaleString()} Ks</span>
+                        {/* Customer Details Form */}
+                        <div className="space-y-4">
+                           <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2 flex items-center gap-2"><User size={16} className="text-indigo-500"/> ဝယ်သူအချက်အလက်များ</h4>
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                             <Input label="ဝယ်သူအမည်" val={sellCustName} setVal={setSellCustName} placeholder="Customer Name" />
+                             <Input label="ဖုန်းနံပါတ်" val={sellPhone} setVal={setSellPhone} placeholder="Phone Number" />
                            </div>
-                        )}
-
-                        <PaymentMethodSelector selected={sellPaymentMethod} onChange={setSellPaymentMethod} accounts={paymentAccounts} />
-                        
-                        <Input label="ဝယ်သူအမည် (Optional)" val={sellCustName} setVal={setSellCustName} placeholder="Customer Name" />
+                           
+                           <label className="flex items-center gap-2 p-3 border border-slate-200 rounded-xl bg-slate-50 cursor-pointer">
+                             <input type="checkbox" checked={sellIsDelivery} onChange={(e) => setSellIsDelivery(e.target.checked)} className="w-5 h-5 text-indigo-600 rounded" />
+                             <Truck size={18} className={sellIsDelivery ? "text-indigo-600" : "text-slate-400"} />
+                             <span className={`font-bold ${sellIsDelivery ? "text-indigo-700" : "text-slate-600"}`}>Delivery ဖြင့် ပို့မည်</span>
+                           </label>
+                           
+                           {sellIsDelivery && (
+                             <div className="space-y-4 p-4 border border-indigo-100 bg-indigo-50/30 rounded-xl animate-in fade-in slide-in-from-top-2">
+                               <Input label="မြို့" icon={MapPin} val={sellCity} setVal={setSellCity} req />
+                               <Input label="လိပ်စာအပြည့်အစုံ" icon={Navigation} val={sellAddress} setVal={setSellAddress} req rows="2" />
+                             </div>
+                           )}
+                           
+                           <Input label="မှတ်ချက် (Remark)" val={sellRemark} setVal={setSellRemark} placeholder="Optional notes..." rows="2" />
+                        </div>
                       </div>
                       
-                      <div className="p-4 border-t border-slate-100 bg-white rounded-b-3xl">
+                      <div className="p-4 border-t border-slate-100 bg-white rounded-b-3xl shrink-0">
                         <button onClick={handlePosCheckoutComplete} className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white font-black text-lg rounded-xl shadow-lg shadow-emerald-200 flex justify-center items-center gap-2 active:scale-95 transition-all">
                           <CheckCircle2 size={22}/> အတည်ပြုမည် (Confirm)
                         </button>
@@ -1054,7 +1105,6 @@
                     </div>
                   </div>
                 )}
-
 
                 {/* 2. ADD PRODUCT */}
                 {activeScreen === 'addProduct' && (
@@ -1173,71 +1223,76 @@
                   </div>
                 )}
 
-                {/* VOUCHER MODAL */}
+                {/* --- VOUCHER MODAL --- */}
                 {voucherData && (
                   <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 z-[70] animate-in fade-in zoom-in duration-300">
-                    <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl flex flex-col overflow-hidden">
+                    <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl flex flex-col overflow-hidden max-h-[90vh]">
                       
-                      <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                      <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
                         <h3 className="font-bold text-indigo-700 flex items-center gap-2"><CheckCircle2 size={18}/> အရောင်းအောင်မြင်ပါသည်</h3>
                         <button onClick={() => setVoucherData(null)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
                       </div>
                       
-                      <div id="receipt-box" className="p-6 receipt-container mx-auto w-full max-w-[340px] relative bg-white">
-                        <div className="text-center mb-5">
-                          <h1 className="text-3xl font-black tracking-wider text-black">SOKO</h1>
-                          <p className="text-[11px] text-gray-500 uppercase tracking-widest mt-1 font-bold">Sale Receipt</p>
-                        </div>
-                        <div className="receipt-dashed-border pb-3 mb-3 text-sm space-y-1.5">
-                          <div className="flex justify-between items-center"><span className="text-gray-500 font-medium">Date:</span><span className="font-bold text-black">{voucherData.date}</span></div>
-                          <div className="flex justify-between items-center"><span className="text-gray-500 font-medium">Order ID:</span><span className="font-mono font-bold text-black">#{voucherData.id.toString().slice(-6)}</span></div>
-                          <div className="flex justify-between items-start"><span className="text-gray-500 font-medium whitespace-nowrap mr-2">Customer:</span><span className="font-bold text-black text-right break-words">{voucherData.name}</span></div>
-                        </div>
-                        
-                        <div className="receipt-dashed-border pb-3 mb-4">
-                          <div className="flex justify-between text-xs font-bold text-black mb-2 uppercase bg-gray-100 p-1.5 rounded">
-                            <span className="w-1/2 text-left pl-1">Item</span><span className="w-1/4 text-center">Qty</span><span className="w-1/4 text-right pr-1">Amt</span>
+                      <div className="overflow-y-auto">
+                        <div id="receipt-box" className="p-6 receipt-container mx-auto w-full max-w-[340px] relative bg-white">
+                          <div className="text-center mb-5">
+                            <h1 className="text-2xl font-black tracking-wider text-black">{shopName}</h1>
+                            {shopPhone && <p className="text-xs text-gray-600 mt-1">{shopPhone}</p>}
+                            {shopAddress && <p className="text-[10px] text-gray-500 mt-0.5 leading-tight px-4">{shopAddress}</p>}
+                            <p className="text-[11px] text-gray-500 uppercase tracking-widest mt-2 font-bold border-t border-dashed border-gray-300 pt-2">Sale Receipt</p>
                           </div>
-                          {voucherData.cartItems ? voucherData.cartItems.map((item, i) => (
-                            <div key={i} className="flex justify-between text-sm font-bold text-black items-start px-1 mb-2">
-                              <span className="w-1/2 text-left break-words pr-2 leading-tight text-xs">{item.name}</span>
-                              <span className="w-1/4 text-center">{item.qty}</span>
-                              <span className="w-1/4 text-right">{(item.price * item.qty).toLocaleString()}</span>
-                            </div>
-                          )) : (
-                            <div className="flex justify-between text-sm font-bold text-black items-start px-1">
-                              <span className="w-1/2 text-left break-words pr-2 leading-tight text-xs">{voucherData.productName}</span>
-                              <span className="w-1/4 text-center">{voucherData.quantity}</span>
-                              <span className="w-1/4 text-right">{voucherData.amount.toLocaleString()}</span>
-                            </div>
-                          )}
-                        </div>
-                        
-                        <div className="space-y-2.5 text-sm mb-6 px-1">
-                          <div className="flex justify-between items-end border-b border-gray-200 pb-2">
-                            <span className="font-bold text-gray-600">Total</span>
-                            <span className="font-black text-xl text-black">{voucherData.amount.toLocaleString()} <span className="text-xs font-bold">Ks</span></span>
+                          <div className="receipt-dashed-border pb-3 mb-3 text-sm space-y-1.5">
+                            <div className="flex justify-between items-center"><span className="text-gray-500 font-medium">Date:</span><span className="font-bold text-black">{voucherData.date}</span></div>
+                            <div className="flex justify-between items-center"><span className="text-gray-500 font-medium">Order ID:</span><span className="font-mono font-bold text-black">#{voucherData.id.toString().slice(-6)}</span></div>
+                            <div className="flex justify-between items-start"><span className="text-gray-500 font-medium whitespace-nowrap mr-2">Customer:</span><span className="font-bold text-black text-right break-words">{voucherData.name}</span></div>
+                            {voucherData.customerPhone && <div className="flex justify-between items-start"><span className="text-gray-500 font-medium whitespace-nowrap mr-2">Phone:</span><span className="font-bold text-black text-right break-words">{voucherData.customerPhone}</span></div>}
                           </div>
-                          <div className="flex justify-between items-center text-gray-600 font-medium">
-                            <span>Paid ({voucherData.paymentMethod})</span><span className="font-bold text-black">{voucherData.received.toLocaleString()} Ks</span>
+                          
+                          <div className="receipt-dashed-border pb-3 mb-4">
+                            <div className="flex justify-between text-xs font-bold text-black mb-2 uppercase bg-gray-100 p-1.5 rounded">
+                              <span className="w-1/2 text-left pl-1">Item</span><span className="w-1/4 text-center">Qty</span><span className="w-1/4 text-right pr-1">Amt</span>
+                            </div>
+                            {voucherData.cartItems ? voucherData.cartItems.map((item, i) => (
+                              <div key={i} className="flex justify-between text-sm font-bold text-black items-start px-1 mb-2">
+                                <span className="w-1/2 text-left break-words pr-2 leading-tight text-[13px]">{item.name}</span>
+                                <span className="w-1/4 text-center">{item.qty}</span>
+                                <span className="w-1/4 text-right">{(item.price * item.qty).toLocaleString()}</span>
+                              </div>
+                            )) : (
+                              <div className="flex justify-between text-sm font-bold text-black items-start px-1">
+                                <span className="w-1/2 text-left break-words pr-2 leading-tight text-[13px]">{voucherData.productName}</span>
+                                <span className="w-1/4 text-center">{voucherData.quantity}</span>
+                                <span className="w-1/4 text-right">{voucherData.amount.toLocaleString()}</span>
+                              </div>
+                            )}
                           </div>
-                          {voucherData.balance > 0 && (
-                            <div className="flex justify-between items-center text-red-600 bg-red-50 p-1.5 rounded-md border border-red-100">
-                              <span className="font-bold">Balance Due</span><span className="font-black">{voucherData.balance.toLocaleString()} Ks</span>
+                          
+                          <div className="space-y-2.5 text-sm mb-6 px-1">
+                            <div className="flex justify-between items-end border-b border-gray-200 pb-2">
+                              <span className="font-bold text-gray-600">Total Amount</span>
+                              <span className="font-black text-xl text-black">{voucherData.amount.toLocaleString()} <span className="text-xs font-bold">Ks</span></span>
                             </div>
-                          )}
-                          {voucherData.change > 0 && (
-                            <div className="flex justify-between items-center text-emerald-600 bg-emerald-50 p-1.5 rounded-md border border-emerald-100">
-                              <span className="font-bold">Change</span><span className="font-black">{voucherData.change.toLocaleString()} Ks</span>
+                            <div className="flex justify-between items-center text-gray-600 font-medium">
+                              <span>Paid ({voucherData.paymentMethod})</span><span className="font-bold text-black">{voucherData.received.toLocaleString()} Ks</span>
                             </div>
-                          )}
-                        </div>
-                        <div className="text-center flex flex-col items-center justify-center gap-1.5 mt-2">
-                          <Receipt size={24} className="text-gray-300" /><p className="text-[11px] font-bold text-gray-500">Thank you for shopping with us!</p>
+                            {voucherData.balance > 0 && (
+                              <div className="flex justify-between items-center text-red-600 bg-red-50 p-1.5 rounded-md border border-red-100">
+                                <span className="font-bold">Balance Due</span><span className="font-black">{voucherData.balance.toLocaleString()} Ks</span>
+                              </div>
+                            )}
+                            {voucherData.change > 0 && (
+                              <div className="flex justify-between items-center text-emerald-600 bg-emerald-50 p-1.5 rounded-md border border-emerald-100">
+                                <span className="font-bold">Change</span><span className="font-black">{voucherData.change.toLocaleString()} Ks</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-center flex flex-col items-center justify-center gap-1.5 mt-2">
+                            <Receipt size={24} className="text-gray-300" /><p className="text-[11px] font-bold text-gray-500">Thank you for shopping with us!</p>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="p-4 border-t border-slate-100 flex gap-3 bg-slate-50 rounded-b-2xl">
+                      <div className="p-4 border-t border-slate-100 flex gap-3 bg-slate-50 rounded-b-2xl shrink-0">
                         <button onClick={() => setVoucherData(null)} className="flex-1 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-50">ပိတ်မည်</button>
                         <button onClick={downloadVoucher} className="flex-1 py-2.5 bg-indigo-600 text-white font-bold rounded-xl flex justify-center items-center gap-2 shadow-md hover:bg-indigo-700"><Download size={16}/> ပုံအဖြစ် သိမ်းမည်</button>
                       </div>
@@ -1274,7 +1329,22 @@
 
                 {/* 5. SETTINGS SCREEN */}
                 {activeScreen === 'settings' && (
-                  <div className="animate-in fade-in duration-300 max-w-2xl mx-auto mt-4">
+                  <div className="animate-in fade-in duration-300 max-w-2xl mx-auto mt-4 space-y-6">
+                    
+                    {/* Shop Settings */}
+                    <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-md">
+                      <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2 border-l-4 border-indigo-500 pl-3">
+                        <Store size={20} className="text-indigo-500" /> ဆိုင်အချက်အလက်များ (Shop Info)
+                      </h2>
+                      <form onSubmit={saveShopInfo} className="space-y-4">
+                        <Input label="ဆိုင်အမည် (Shop Name)" val={shopName} setVal={setShopName} req placeholder="ဆိုင်အမည် ထည့်ပါ" />
+                        <Input label="ဖုန်းနံပါတ် (Phone Number)" val={shopPhone} setVal={setShopPhone} placeholder="ဆက်သွယ်ရန် ဖုန်းနံပါတ်" />
+                        <Input label="လိပ်စာ (Address)" val={shopAddress} setVal={setShopAddress} placeholder="ဆိုင်လိပ်စာအပြည့်အစုံ" rows="2" />
+                        <button type="submit" className="w-full py-2.5 bg-indigo-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm hover:bg-indigo-700 transition-colors"><Save size={16}/> အချက်အလက်များ သိမ်းမည်</button>
+                      </form>
+                    </div>
+
+                    {/* Payment Accounts */}
                     <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-md">
                       <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2 border-l-4 border-indigo-500 pl-3">ငွေပေးချေမှု အကောင့်များ ပြင်ဆင်ရန်</h2>
                       <div className="space-y-4 mb-8">
@@ -1372,6 +1442,24 @@
                         </form>
                       </div>
                       <div className="border-t border-slate-100 p-4 flex gap-3 rounded-b-2xl"><button type="button" onClick={() => setDebtPaymentRecord(null)} className="flex-1 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl">Cancel</button><button type="submit" form="debtForm" className="flex-1 py-2.5 bg-emerald-600 text-white font-bold rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-emerald-200"><CheckSquare size={16}/> အတည်ပြုမည်</button></div>
+                    </div>
+                  </div>
+                )}
+
+                {/* CANCEL ORDER MODAL (Double Tap) */}
+                {cancelOrderModal && (
+                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl">
+                      <div className="border-b border-slate-100 px-6 py-4 flex justify-between items-center rounded-t-2xl"><h3 className="font-bold text-lg text-rose-600 flex items-center gap-2"><AlertCircle size={18}/> အော်ဒါ ဖျက်သိမ်းမည်</h3><button onClick={() => setCancelOrderModal(null)} className="bg-slate-100 p-1.5 rounded-full text-slate-500"><X size={18}/></button></div>
+                      <div className="p-6">
+                        <p className="text-slate-600 text-sm mb-4 leading-relaxed">
+                          <span className="font-bold text-slate-800">{cancelOrderModal.name}</span> ၏ <span className="font-bold">{cancelOrderModal.productName} ({cancelOrderModal.quantity} ခု)</span> အော်ဒါကို ဖျက်သိမ်းရန် သေချာပါသလား?
+                        </p>
+                        <div className="bg-amber-50 text-amber-700 p-3 rounded-lg text-xs border border-amber-200 font-medium leading-relaxed">
+                          ဤလုပ်ဆောင်ချက်သည် အရောင်းမှတ်တမ်းမှ ဖယ်ရှားပြီး ပစ္စည်းအရေအတွက်ကို လက်ကျန်ထဲသို့ အလိုအလျောက် ပြန်လည်ပေါင်းထည့်ပေးမည် ဖြစ်ပါသည်။ ငွေစာရင်းမှလည်း လျှော့ချပေးမည် ဖြစ်ပါသည်။
+                        </div>
+                      </div>
+                      <div className="border-t border-slate-100 p-4 flex gap-3 rounded-b-2xl"><button type="button" onClick={() => setCancelOrderModal(null)} className="flex-1 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl">မဖျက်တော့ပါ</button><button type="button" onClick={confirmCancelOrder} className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-red-200"><Trash2 size={16}/> ဖျက်သိမ်းမည်</button></div>
                     </div>
                   </div>
                 )}
